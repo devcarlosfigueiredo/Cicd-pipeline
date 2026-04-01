@@ -1,0 +1,201 @@
+# =============================================================================
+# CI/CD Pipeline — GitHub Actions
+# =============================================================================
+# Triggered on every push and pull request to main / develop.
+#
+# Pipeline stages:
+#   1. lint       → code quality checks (flake8 / black)
+#   2. test       → pytest with coverage report
+#   3. build      → Docker image build + tag
+#   4. deploy     → simulated deploy (replace with real cloud deploy)
+# =============================================================================
+
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+env:
+  IMAGE_NAME: cicd-pipeline-demo
+  REGISTRY: ghcr.io
+  PYTHON_VERSION: "3.12"
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # JOB 1 — Code Quality
+  # ---------------------------------------------------------------------------
+  lint:
+    name: 🔍 Code Quality
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install linting tools
+        run: pip install flake8 black
+
+      - name: Check code formatting (black)
+        run: black --check --diff src/ tests/
+
+      - name: Lint with flake8
+        run: |
+          # Stop the build if there are Python syntax errors or undefined names
+          flake8 src/ tests/ --count --select=E9,F63,F7,F82 --show-source --statistics
+          # Warn on style issues (exit-zero = don't fail the build on style)
+          flake8 src/ tests/ --count --exit-zero --max-complexity=10 --max-line-length=100 --statistics
+
+  # ---------------------------------------------------------------------------
+  # JOB 2 — Automated Tests
+  # ---------------------------------------------------------------------------
+  test:
+    name: 🧪 Tests
+    runs-on: ubuntu-latest
+    needs: lint
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run tests with coverage
+        run: pytest tests/ -v --cov=src --cov-report=term-missing --cov-report=xml
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage.xml
+          retention-days: 7
+
+  # ---------------------------------------------------------------------------
+  # JOB 3 — Docker Build & Push
+  # ---------------------------------------------------------------------------
+  build:
+    name: 🐳 Build & Push Image
+    runs-on: ubuntu-latest
+    needs: test
+    # Only build on pushes to main or develop (not on PRs)
+    if: github.event_name == 'push'
+
+    permissions:
+      contents: read
+      packages: write
+
+    outputs:
+      image_tag: ${{ steps.meta.outputs.tags }}
+      image_digest: ${{ steps.push.outputs.digest }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker metadata (tags & labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}
+          tags: |
+            # Tag with branch name
+            type=ref,event=branch
+            # Tag with short commit SHA
+            type=sha,prefix=sha-
+            # Tag as 'latest' on main branch
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+
+      - name: Build and push Docker image
+        id: push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # Use GitHub Actions cache to speed up builds
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            APP_VERSION=${{ github.sha }}
+
+  # ---------------------------------------------------------------------------
+  # JOB 4 — Deploy
+  # ---------------------------------------------------------------------------
+  deploy:
+    name: 🚀 Deploy
+    runs-on: ubuntu-latest
+    needs: build
+    # Only deploy from the main branch
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    environment:
+      name: production
+      url: https://your-app-url.example.com
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Simulate deployment
+        run: |
+          echo "============================================"
+          echo "  🚀 Deploying to production environment"
+          echo "============================================"
+          echo "  Image : ${{ needs.build.outputs.image_tag }}"
+          echo "  Commit: ${{ github.sha }}"
+          echo "  Actor : ${{ github.actor }}"
+          echo "  Branch: ${{ github.ref_name }}"
+          echo "--------------------------------------------"
+          echo "  ✅ Deploy simulation complete!"
+          echo "============================================"
+          #
+          # ── Real-world deploy examples ──────────────────
+          #
+          # AWS ECS:
+          #   aws ecs update-service \
+          #     --cluster my-cluster \
+          #     --service my-service \
+          #     --force-new-deployment
+          #
+          # Azure Web App:
+          #   az webapp config container set \
+          #     --name my-app \
+          #     --resource-group my-rg \
+          #     --docker-custom-image-name $IMAGE_TAG
+          #
+          # Kubernetes:
+          #   kubectl set image deployment/my-app \
+          #     api=$IMAGE_TAG
+          #
+
+      - name: Notify deployment success
+        run: |
+          echo "✅ Deployment to production completed successfully."
+          echo "📦 Version: ${{ github.sha }}"
+          echo "🕐 Time   : $(date -u '+%Y-%m-%dT%H:%M:%SZ')"

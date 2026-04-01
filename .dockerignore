@@ -1,0 +1,53 @@
+# =============================================================================
+# .dockerignore — Exclude files from Docker build context
+# =============================================================================
+# Keeping the build context small speeds up builds and reduces image size.
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+.eggs/
+dist/
+build/
+*.whl
+
+# Virtual environments
+.venv/
+venv/
+env/
+.env/
+
+# Tests & coverage (not needed in production image)
+tests/
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Version control
+.git/
+.gitignore
+
+# CI/CD
+.github/
+
+# Documentation
+*.md
+docs/
+
+# IDE / editor config
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Docker files (not needed inside image)
+docker-compose*.yml
+Dockerfile*
+
+# Environment files (secrets must not be baked into images)
+.env
+.env.*

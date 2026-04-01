@@ -1,0 +1,16 @@
+# =============================================================================
+# Python Dependencies — CI/CD Pipeline Demo
+# =============================================================================
+# Pin exact versions for reproducible builds across all environments.
+# Update with: pip-compile requirements.in
+# =============================================================================
+
+# ── Application ──────────────────────────────────────────────────────────────
+fastapi==0.115.6
+uvicorn[standard]==0.32.1
+pydantic==2.10.3
+
+# ── Testing ───────────────────────────────────────────────────────────────────
+pytest==8.3.4
+pytest-cov==6.0.0
+httpx==0.28.1          # Required by FastAPI TestClient

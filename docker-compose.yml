@@ -1,0 +1,36 @@
+# =============================================================================
+# Docker Compose — CI/CD Pipeline Demo
+# =============================================================================
+# Usage:
+#   docker compose up --build        # start in foreground
+#   docker compose up -d --build     # start in background (detached)
+#   docker compose down              # stop and remove containers
+# =============================================================================
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+    container_name: cicd-demo-api
+    ports:
+      - "8000:8000"
+    environment:
+      - APP_ENV=${APP_ENV:-development}
+      - APP_VERSION=${APP_VERSION:-1.0.0}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-*}
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
